@@ -1,121 +1,142 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useState, useLocation, useParams } from "react";
 import { useSocket } from "../contexts/SocketContext";
-import peer from "../services/peer";
+import { useNavigate } from "react-router-dom";
+import {Device} from "mediasoup-client";
 
 const RoomPage = () => {
   const socket = useSocket();
-  const [remoteSocketId, setRemoteSocketId] = useState(null);
-  const [myStream, setMyStream] = useState();
-  const [remoteStream, setRemoteStream] = useState();
+  const navigate = useNavigate();
+  const [device,setDevice] = useState(null);
+  const { roomId } = useParams();
+  const location = useLocation();
+  const email = location.state?.email;
+  const [producerTransport, setProducerTransport] = useState(null);
+  const [consumerTransport, setConsumerTransport] = useState(null);
+  // CHANGE: later switch this with session to keep email cuz on refresh its gonna vanish
 
-  const handleUserJoined = useCallback((data) => {
-    const { email, id } = data;
-    console.log(`User ${email} joined room`);
-    setRemoteSocketId(id);
-  }, []);
+  const initiateSendTransport = useCallback((loadedDevice) => {
+    socket.emit("createWebRtcTransport", { roomId }, async ({ params, error }) => {
+      if (error) {
+        console.error(error);
+        return;
+      }
 
-  const handleIncomingCall = useCallback(
-    async ({ from, offer }) => {
-      setRemoteSocketId(from);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-        video: true,
+      const transport = loadedDevice.createSendTransport(params);
+
+      transport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+        try {
+          socket.emit('transport:connect', { 
+            roomId: roomId,
+            transportId: transport.id,
+            dtlsParameters 
+          }, () => {
+            callback(); 
+          });
+        } catch (error) {
+          errback(error); 
+        }
       });
-      setMyStream(stream);
-      console.log("incoming call ", from, " ", offer);
 
-      const answer = await peer.getAnswer(offer);
-      socket.emit("call:accepted", { to: from, answer });
-    },
-    [socket],
-  );
+      transport.on('produce', async (parameters, callback, errback) => {
+        try {
+          socket.emit('transport:produce', {
+            roomId:roomId,
+            transportId:transport.id,
+            kind: parameters.kind,
+            rtpParameters: parameters.rtpParameters,
+            appData: parameters.appData,
+          }, ({ id, error }) => {
+            if (error) {
+              errback(error);
+              return;
+            }
+            callback({ id }); 
+          });
+        } catch (error) {
+          errback(error);
+        }
+      });
 
-  const sendStreams = useCallback(() => {
-    for (const track of myStream.getTracks()) {
-      peer.peer.addTrack(track, myStream);
+      setProducerTransport(transport);
+      console.log('Send transport created on client!');
+    });
+  },[socket, roomId]);
+
+  const initiateRecvTransport = useCallback((loadedDevice) => {
+    socket.emit("createWebRtcTransport", { roomId }, async ({ params, error }) => {
+      if (error) {
+        console.error(error);
+        return;
+      }
+      
+      const recvTransport = loadedDevice.createRecvTransport(params);
+      
+      recvTransport.on('connect', async ({ dtlsParameters }, callback, errback) => {
+        try {
+          socket.emit('transport:connect', { 
+            roomId: roomId,
+            transportId: recvTransport.id,
+            dtlsParameters 
+          }, () => {
+            callback(); 
+          });
+        } catch (error) {
+          errback(error); 
+        }
+      });
+
+      setConsumerTransport(recvTransport);
+      console.log('Receive transport created on client!');
+    });
+  },[roomId, socket]);
+
+  useEffect(()=>{
+    if (!email) {
+      console.log("No email found, redirecting to lobby...");
+      navigate('/');
+      return;
     }
-  }, [myStream]);
 
-  const handleCallAccepted = useCallback(
-    ({ answer }) => {
-      peer.setLocalDescription(answer);
-      console.log("call accepted");
+    socket.emit("room:join",{email,roomId}, async (response) => {
+      if (response.error) {
+        console.error(response.error);
+        return;
+      }
 
-      sendStreams();
-    },
-    [sendStreams],
-  );
+      try {
+        const newDevice = new Device();
 
-  useEffect(() => {
-    peer.peer.addEventListener("track", async (e) => {
-      const remStream = e.streams;
-      console.log("received the tracks!!", remStream);
-      setRemoteStream(remStream[0]);
+        await newDevice.load({ 
+          routerRtpCapabilities: response.rtpCapabilities 
+        });
+
+        console.log('Mediasoup device loaded successfully!');
+
+        if (!newDevice.canProduce('video')) {
+          console.log('This browser cannot produce video');
+        }
+
+        setDevice(newDevice);
+
+        initiateSendTransport(newDevice);
+
+        initiateRecvTransport(newDevice);
+      } catch (error) {
+        if (error.name === 'UnsupportedError') {
+          console.error('Browser is not supported by Mediasoup');
+        } else {
+          console.error('Failed to load device:', error);
+        }
+      }
     });
-  }, []);
+  },[email, roomId, socket, navigate, initiateSendTransport, initiateRecvTransport]);
 
-  const handleNegoNeeded = useCallback(async () => {
-    const offer = await peer.getOffer();
-    socket.emit("peer:nego:needed", { to: remoteSocketId, offer });
-  }, [remoteSocketId, socket]);
-
-  const handleNegoIncoming = useCallback(
-    async ({ from, offer }) => {
-      const answer = await peer.getAnswer(offer);
-      socket.emit("peer:nego:done", { to: from, answer });
-    },
-    [socket],
-  );
-
-  const handleNegoFinal = useCallback(async ({ answer }) => {
-    // console.log("handleNegoFinal", answer);
-    await peer.setLocalDescription(answer);
-  }, []);
-
-  useEffect(() => {
-    peer.peer.addEventListener("negotiationneeded", handleNegoNeeded);
-    return () => {
-      peer.peer.removeEventListener("negotiationneeded", handleNegoNeeded);
-    };
-  }, [handleNegoNeeded]);
-
-  useEffect(() => {
-    socket.on("user:joined", handleUserJoined);
-    socket.on("incoming:call", handleIncomingCall);
-    socket.on("call:accepted", handleCallAccepted);
-    socket.on("peer:nego:needed", handleNegoIncoming);
-    socket.on("peer:nego:final", handleNegoFinal);
-
-    return () => {
-      socket.off("user:joined", handleUserJoined);
-      socket.off("incoming:call", handleIncomingCall);
-      socket.off("call:accepted", handleCallAccepted);
-      socket.off("peer:nego:needed", handleNegoIncoming);
-      socket.off("peer:nego:final", handleNegoFinal);
-    };
-  }, [
-    socket,
-    handleUserJoined,
-    handleIncomingCall,
-    handleCallAccepted,
-    handleNegoIncoming,
-    handleNegoFinal,
-  ]);
-
-  const handleCallUser = useCallback(async () => {
-    const stream = await navigator.mediaDevices.getUserMedia({
-      audio: true,
-      video: true,
-    });
-    const offer = await peer.getOffer();
-    socket.emit("user:call", { to: remoteSocketId, offer });
-    setMyStream(stream);
-  }, [remoteSocketId, socket]);
-
+  
+  
   return (
     <div>
       <h1>Room page</h1>
-      <h4>{remoteSocketId ? "You are connected" : "No one in the room"}</h4>
+      {/* <h4>{remoteSocketId ? "You are connected" : "No one in the room"}</h4>
       {remoteSocketId && <button onClick={handleCallUser}>Call</button>}
       {myStream && <button onClick={sendStreams}>Send Streams</button>}
 
@@ -159,7 +180,7 @@ const RoomPage = () => {
             }}
           />
         </div>
-      )}
+      )} */}
     </div>
   );
 };

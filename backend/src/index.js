@@ -1,9 +1,16 @@
-import { httpServer } from './app.js'
+import { httpServer } from './app.js';
+import { createWorker } from "./utils/mediasoup.config.js";
 import dotenv from 'dotenv'
 dotenv.config()
 
-const port = parseInt(process.env.SERVER_PORT)||3000;
+const PORT = parseInt(process.env.SERVER_PORT)||3000;
 
-httpServer.listen(port,()=>{
-  console.log(`Server running on port ${port}`)
-});
+createWorker()
+  .then(() => {
+    httpServer.listen(PORT, () => {
+      console.log(`Server is running and listening on port ${PORT}`);
+    });
+  })
+  .catch((err) => {
+    console.error("Failed to initialize Mediasoup:", err);
+  });
