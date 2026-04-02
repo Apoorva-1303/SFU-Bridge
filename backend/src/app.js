@@ -183,6 +183,33 @@ io.on("connection", (socket) => {
     }
   });
 
+  socket.on('close-producer', ({ roomId, producerId }) => {
+    try {
+      const roomState = rooms.get(roomId);
+      if (!roomState) return;
+
+      const peer = roomState.peers.get(socket.id);
+      if (!peer) return;
+
+      const producerIndex = peer.producers.findIndex(p => p.id === producerId);
+      
+      if (producerIndex !== -1) {
+        const producer = peer.producers[producerIndex];
+        
+        producer.close();
+        
+        peer.producers.splice(producerIndex, 1);
+        
+        console.log(`Closed producer ${producerId} for peer ${socket.id}`);
+      }
+      // TODO : emit to others to shut their consumers for this producer
+    } catch (error) {
+      console.error('Error closing producer:', error);
+    }
+  });
+
+  
+
 
 
 
