@@ -7,7 +7,7 @@ const workerSettings = {
 };
 
 
-const createWorker = async () => {
+export const createWorker = async () => {
   let worker = await mediasoup.createWorker(workerSettings);
   worker.on('died', () => {
     console.error('MediaSoup worker has died');
@@ -16,4 +16,3 @@ const createWorker = async () => {
   return worker;
 };
 
-module.exports = { createWorker};

@@ -1,14 +1,8 @@
-import {
-  useCallback,
-  useEffect,
-  useState,
-  useLocation,
-  useParams,
-  useRef,
-} from "react";
+import { useCallback, useEffect, useState, useRef } from "react";
 import { useSocket } from "../contexts/SocketContext";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Device } from "mediasoup-client";
+import { RemoteMedia } from "../components/RemoteMedia";
 
 const RoomPage = () => {
   const socket = useSocket();
@@ -28,6 +22,8 @@ const RoomPage = () => {
   const [audioProducer, setAudioProducer] = useState(null);
   const localVideoRef = useRef(null);
 
+  const [remoteConsumers, setRemoteConsumers] = useState([]);
+
   const initiateSendTransport = useCallback(
     (loadedDevice) => {
       socket.emit(
@@ -39,6 +35,7 @@ const RoomPage = () => {
             return;
           }
 
+          console.log("Received params from server:", params);
           const transport = loadedDevice.createSendTransport(params);
 
           transport.on(
@@ -94,6 +91,51 @@ const RoomPage = () => {
     [socket, roomId],
   );
 
+  const consumeRemoteStream = useCallback(
+    (producerId, email, recvTransport, loadedDevice) => {
+      socket.emit(
+        "consume",
+        {
+          roomId: roomId,
+          transportId: recvTransport.id,
+          producerId: producerId,
+          rtpCapabilities: loadedDevice.rtpCapabilities,
+        },
+        async ({ params, error }) => {
+          if (error) {
+            console.error("Server failed to consume:", error);
+            return;
+          }
+
+          const consumer = await recvTransport.consume({
+            id: params.id,
+            producerId: params.producerId,
+            kind: params.kind,
+            rtpParameters: params.rtpParameters,
+          });
+
+          setRemoteConsumers((prev) => {
+            const isDuplicate = prev.some(
+              (c) => c.consumer.producerId === params.producerId,
+            );
+            if (isDuplicate) {
+              console.log("Duplicate consumer blocked!");
+              return prev;
+            }
+            return [...prev, {consumer:consumer, email:email}];
+          });
+          console.log(`Successfully consuming ${params.kind} stream!`);
+
+          socket.emit("consumer-resume", {
+            roomId: roomId,
+            consumerId: consumer.id,
+          });
+        },
+      );
+    },
+    [roomId, socket],
+  );
+
   const initiateRecvTransport = useCallback(
     (loadedDevice) => {
       socket.emit(
@@ -105,6 +147,7 @@ const RoomPage = () => {
             return;
           }
 
+          console.log("Received params from server:", params);
           const recvTransport = loadedDevice.createRecvTransport(params);
 
           recvTransport.on(
@@ -130,11 +173,86 @@ const RoomPage = () => {
 
           setConsumerTransport(recvTransport);
           console.log("Receive transport created on client!");
+
+          socket.emit("get-producers", { roomId: roomId }, (producerList) => {
+            console.log("Active producers in room:", producerList);
+
+            producerList.forEach(({producerId,email}) => {
+              consumeRemoteStream(producerId, email, recvTransport, loadedDevice);
+            });
+          });
+
+          socket.off("new-producer");
+
+          socket.on("new-producer", ({ producerId, email }) => {
+            console.log("Someone new turned on their camera : ", producerId);
+            consumeRemoteStream(producerId, email, recvTransport, loadedDevice);
+          });
+
+          socket.off("consumer-closed");
+          socket.on("consumer-closed", ({ consumerId }) => {
+            console.log("A remote consumer closed:", consumerId);
+
+            setRemoteConsumers((prevConsumers) =>
+              prevConsumers.filter((c) => c.consumer.id !== consumerId),
+            );
+          });
         },
       );
     },
-    [roomId, socket],
+    [roomId, socket, consumeRemoteStream],
   );
+
+  useEffect(() => {
+    if (!email) {
+      console.log("No email found, redirecting to lobby...");
+      navigate("/");
+      return;
+    }
+    console.log("emitting room join");
+
+    socket.emit("room:join", { email, roomId }, async (response) => {
+      if (response.error) {
+        console.error(response.error);
+        return;
+      }
+
+      try {
+        const newDevice = new Device();
+
+        await newDevice.load({
+          routerRtpCapabilities: response.rtpCapabilities,
+        });
+
+        console.log("Mediasoup device loaded successfully!");
+
+        if (!newDevice.canProduce("video")) {
+          console.log("This browser cannot produce video");
+        }
+
+        setDevice(newDevice);
+
+        console.log("Attempting to create Send Transport...");
+        initiateSendTransport(newDevice);
+        console.log("Attempting to create receive Transport...");
+
+        initiateRecvTransport(newDevice);
+      } catch (error) {
+        if (error.name === "UnsupportedError") {
+          console.error("Browser is not supported by Mediasoup");
+        } else {
+          console.error("Failed to load device:", error);
+        }
+      }
+    });
+  }, [
+    email,
+    roomId,
+    socket,
+    navigate,
+    initiateSendTransport,
+    initiateRecvTransport,
+  ]);
 
   const enableVideo = async () => {
     try {
@@ -223,103 +341,10 @@ const RoomPage = () => {
     console.log("Audio disabled (Muted).");
   };
 
-  useEffect(() => {
-    if (!email) {
-      console.log("No email found, redirecting to lobby...");
-      navigate("/");
-      return;
-    }
-
-    socket.emit("room:join", { email, roomId }, async (response) => {
-      if (response.error) {
-        console.error(response.error);
-        return;
-      }
-
-      try {
-        const newDevice = new Device();
-
-        await newDevice.load({
-          routerRtpCapabilities: response.rtpCapabilities,
-        });
-
-        console.log("Mediasoup device loaded successfully!");
-
-        if (!newDevice.canProduce("video")) {
-          console.log("This browser cannot produce video");
-        }
-
-        setDevice(newDevice);
-
-        initiateSendTransport(newDevice);
-
-        initiateRecvTransport(newDevice);
-      } catch (error) {
-        if (error.name === "UnsupportedError") {
-          console.error("Browser is not supported by Mediasoup");
-        } else {
-          console.error("Failed to load device:", error);
-        }
-      }
-    });
-  }, [
-    email,
-    roomId,
-    socket,
-    navigate,
-    initiateSendTransport,
-    initiateRecvTransport,
-  ]);
-
   return (
     <div>
       <h1>Room page</h1>
-      {/* <h4>{remoteSocketId ? "You are connected" : "No one in the room"}</h4>
-      {remoteSocketId && <button onClick={handleCallUser}>Call</button>}
-      {myStream && <button onClick={sendStreams}>Send Streams</button>}
-
-      {myStream && (
-        <div>
-          <h3>My Stream</h3>
-          <video
-            style={{
-              width: "200px",
-              height: "100px",
-              backgroundColor: "black",
-            }}
-            autoPlay
-            muted
-            playsInline
-            ref={(video) => {
-              if (video && myStream) {
-                video.srcObject = myStream;
-              }
-            }}
-          />
-        </div>
-      )}
-
-      {remoteStream && (
-        <div>
-          <h3>Remote Stream</h3>
-          <video
-            style={{
-              width: "200px",
-              height: "100px",
-              backgroundColor: "black",
-            }}
-            autoPlay
-            muted
-            playsInline
-            ref={(video) => {
-              if (video && remoteStream) {
-                video.srcObject = remoteStream;
-              }
-            }}
-          />
-        </div>
-      )} */}
-
+      <h2>Local Stream</h2>
       <video
         ref={localVideoRef}
         autoPlay
@@ -386,6 +411,13 @@ const RoomPage = () => {
             Unmute Audio
           </button>
         )}
+      </div>
+
+      <h2>Remote Users</h2>
+      <div style={{ display: "flex", flexWrap: "wrap" }}>
+        {remoteConsumers.map(({consumer,email}) => (
+          <RemoteMedia key={consumer.id} consumer={consumer} email={email} />
+        ))}
       </div>
     </div>
   );
