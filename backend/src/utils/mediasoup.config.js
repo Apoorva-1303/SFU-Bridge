@@ -6,13 +6,19 @@ const workerSettings = {
   rtcMaxPort: 10100
 };
 
+let globalWorker = null;
 
 export const createWorker = async () => {
-  let worker = await mediasoup.createWorker(workerSettings);
-  worker.on('died', () => {
+  if (globalWorker) {
+    return globalWorker;
+  }
+
+  globalWorker = await mediasoup.createWorker(workerSettings);
+
+  globalWorker.on('died', () => {
     console.error('MediaSoup worker has died');
+    globalWorker = null;
   });
 
-  return worker;
+  return globalWorker;
 };
-

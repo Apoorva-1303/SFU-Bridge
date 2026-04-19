@@ -22,7 +22,8 @@ const RoomPage = () => {
   const [audioProducer, setAudioProducer] = useState(null);
   const localVideoRef = useRef(null);
 
-  const [remoteConsumers, setRemoteConsumers] = useState([]);
+  // const [remoteConsumers, setRemoteConsumers] = useState([]);
+  const [participants, setParticipants] = useState([]);
 
   const initiateSendTransport = useCallback(
     (loadedDevice) => {
@@ -114,16 +115,26 @@ const RoomPage = () => {
             rtpParameters: params.rtpParameters,
           });
 
-          setRemoteConsumers((prev) => {
-            const isDuplicate = prev.some(
-              (c) => c.consumer.producerId === params.producerId,
-            );
-            if (isDuplicate) {
-              console.log("Duplicate consumer blocked!");
-              return prev;
-            }
-            return [...prev, {consumer:consumer, email:email}];
-          });
+          // setRemoteConsumers((prev) => {
+          //   const isDuplicate = prev.some(
+          //     (c) => c.consumer.producerId === params.producerId,
+          //   );
+          //   if (isDuplicate) {
+          //     console.log("Duplicate consumer blocked!");
+          //     return prev;
+          //   }
+          //   return [...prev, {consumer:consumer, email:email}];
+          // });
+
+          setParticipants((prev) =>
+            prev.map((p) => {
+              if (p.email === email) {
+                if (consumer.kind === "video") return { ...p, videoConsumer: consumer };
+                if (consumer.kind === "audio") return { ...p, audioConsumer: consumer };
+              }
+              return p;
+            })
+          );
           console.log(`Successfully consuming ${params.kind} stream!`);
 
           socket.emit("consumer-resume", {
@@ -193,9 +204,31 @@ const RoomPage = () => {
           socket.on("consumer-closed", ({ consumerId }) => {
             console.log("A remote consumer closed:", consumerId);
 
-            setRemoteConsumers((prevConsumers) =>
-              prevConsumers.filter((c) => c.consumer.id !== consumerId),
+            setParticipants((prev) =>
+              prev.map((p) => {
+                if (p.videoConsumer?.id === consumerId) return { ...p, videoConsumer: null };
+                if (p.audioConsumer?.id === consumerId) return { ...p, audioConsumer: null };
+                return p;
+              })
             );
+          });
+
+          socket.off("peer-joined");
+          socket.on("peer-joined", ({ email: joinedEmail }) => {
+            setParticipants((prev) => {
+              const alreadyExists = prev.some((p) => p.email === joinedEmail);
+              if (alreadyExists) return prev; 
+
+              return [
+                ...prev,
+                { email: joinedEmail, videoConsumer: null, audioConsumer: null },
+              ];
+            });
+          });
+
+          socket.off("peer-left");
+          socket.on("peer-left", ({ email }) => {
+            setParticipants((prev) => prev.filter((p) => p.email !== email));
           });
         },
       );
@@ -209,6 +242,7 @@ const RoomPage = () => {
       navigate("/");
       return;
     }
+    console.log("email is :-> ",email);
     console.log("emitting room join");
 
     socket.emit("room:join", { email, roomId }, async (response) => {
@@ -216,6 +250,20 @@ const RoomPage = () => {
         console.error(response.error);
         return;
       }
+
+      if (response.peers) {
+        setParticipants(
+          response.peers
+            .filter((peer) => peer.email !== email) 
+            .map((peer) => ({
+              email: peer.email,
+              videoConsumer: null,
+              audioConsumer: null,
+            }))
+        );
+      }
+
+      console.log("F: participants list : ",participants);
 
       try {
         const newDevice = new Device();
@@ -251,7 +299,7 @@ const RoomPage = () => {
     socket,
     navigate,
     initiateSendTransport,
-    initiateRecvTransport,
+    initiateRecvTransport
   ]);
 
   const enableVideo = async () => {
@@ -341,6 +389,12 @@ const RoomPage = () => {
     console.log("Audio disabled (Muted).");
   };
 
+  const debugg = ()=>{
+    participants.map(ele=>{
+      console.log(ele);
+    })
+  };
+
   return (
     <div>
       <h1>Room page</h1>
@@ -414,11 +468,15 @@ const RoomPage = () => {
       </div>
 
       <h2>Remote Users</h2>
-      <div style={{ display: "flex", flexWrap: "wrap" }}>
-        {remoteConsumers.map(({consumer,email}) => (
-          <RemoteMedia key={consumer.id} consumer={consumer} email={email} />
+      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
+        {participants.map((participant) => (
+          <RemoteMedia 
+            key={participant.email} 
+            participant={participant} 
+          />
         ))}
       </div>
+      <button onClick={debugg}>hello</button>
     </div>
   );
 };

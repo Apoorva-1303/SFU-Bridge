@@ -87,6 +87,21 @@ io.on("connection", (socket) => {
 
       const roomState = rooms.get(roomId);
 
+      if (roomState.peers.has(socket.id)) {
+        const existingPeers = Array.from(roomState.peers.values()).map(p => ({ email: p.email }));
+        return callback({
+            rtpCapabilities: roomState.router.rtpCapabilities,
+            peers: existingPeers,
+        });
+      }
+
+      const existingPeers = [];
+      roomState.peers.forEach((peer, peerSocketId) => {
+        existingPeers.push({ email: peer.email });
+      });
+
+      console.log("B: existing peers list : ",existingPeers);
+
       roomState.peers.set(socket.id, {
         email: email,
         transports: [],
@@ -94,8 +109,11 @@ io.on("connection", (socket) => {
         consumers: [],
       });
 
+      socket.to(roomId).emit("peer-joined", { email: email });
+
       callback({
         rtpCapabilities: roomState.router.rtpCapabilities,
+        peers: existingPeers, 
       });
     } catch (error) {
       console.error("Error joining room:", error);
@@ -323,6 +341,8 @@ io.on("connection", (socket) => {
         if (peer.transports) {
           peer.transports.forEach((transport) => transport.close());
         }
+
+        socket.to(roomId).emit("peer-left", { email: peer.email });
 
         roomState.peers.delete(socket.id);
         console.log(`Cleaned up peer ${socket.id} from room ${roomId}`);
