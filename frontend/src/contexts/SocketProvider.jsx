@@ -3,11 +3,11 @@ import { io } from 'socket.io-client';
 import { SocketContext } from './SocketContext';
 
 export const SocketProvider = (props) => {
-  const domain = "/"; 
-  
+  const domain = "/";
+
   const socket = useMemo(() => io(domain, {
     // This ensures socket.io uses the proxy correctly
-    path: '/socket.io' 
+    path: '/socket.io'
   }), [domain]);
 
   return (

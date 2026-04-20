@@ -3,6 +3,8 @@ import { useSocket } from "../contexts/SocketContext";
 import { useNavigate, useLocation, useParams } from "react-router-dom";
 import { Device } from "mediasoup-client";
 import { RemoteMedia } from "../components/RemoteMedia";
+import { useWhisperWorker } from '../hooks/useWhisperWorker';
+import { useVAD } from '../hooks/useVAD';
 
 const RoomPage = () => {
   const socket = useSocket();
@@ -11,6 +13,20 @@ const RoomPage = () => {
   const { roomId } = useParams();
   const location = useLocation();
   const email = location.state?.email;
+
+  const [summaries, setSummaries] = useState([]);
+
+  const handleNewTranscript = useCallback((text) => {
+    socket.emit('send-transcript', {
+      roomId: roomId,
+      text: text
+    });
+  }, [roomId, socket]);
+
+  const { isWorkerReady, transcripts, sendAudioToWhisper } = useWhisperWorker(handleNewTranscript);
+
+  const { startListening, stopListening } = useVAD(sendAudioToWhisper);
+
   /*
   TODO: later switch this with session to keep email cuz on refresh its gonna vanish 
   The issue is getting email from lobby page to this roompage
@@ -21,6 +37,12 @@ const RoomPage = () => {
   const [videoProducer, setVideoProducer] = useState(null);
   const [audioProducer, setAudioProducer] = useState(null);
   const localVideoRef = useRef(null);
+  const transcriptEndRef = useRef(null);
+
+  useEffect(() => {
+    transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [transcripts]);
+
 
   // const [remoteConsumers, setRemoteConsumers] = useState([]);
   const [participants, setParticipants] = useState([]);
@@ -188,7 +210,7 @@ const RoomPage = () => {
           socket.emit("get-producers", { roomId: roomId }, (producerList) => {
             console.log("Active producers in room:", producerList);
 
-            producerList.forEach(({producerId,email}) => {
+            producerList.forEach(({ producerId, email }) => {
               consumeRemoteStream(producerId, email, recvTransport, loadedDevice);
             });
           });
@@ -217,7 +239,7 @@ const RoomPage = () => {
           socket.on("peer-joined", ({ email: joinedEmail }) => {
             setParticipants((prev) => {
               const alreadyExists = prev.some((p) => p.email === joinedEmail);
-              if (alreadyExists) return prev; 
+              if (alreadyExists) return prev;
 
               return [
                 ...prev,
@@ -237,12 +259,23 @@ const RoomPage = () => {
   );
 
   useEffect(() => {
+    socket.on('new-summary', (data) => {
+      console.log('Received new AI summary:', data);
+      setSummaries((prev) => [...prev, data]);
+    });
+
+    return () => {
+      socket.off('new-summary');
+    };
+  }, [socket]);
+
+  useEffect(() => {
     if (!email) {
       console.log("No email found, redirecting to lobby...");
       navigate("/");
       return;
     }
-    console.log("email is :-> ",email);
+    console.log("email is :-> ", email);
     console.log("emitting room join");
 
     socket.emit("room:join", { email, roomId }, async (response) => {
@@ -254,7 +287,7 @@ const RoomPage = () => {
       if (response.peers) {
         setParticipants(
           response.peers
-            .filter((peer) => peer.email !== email) 
+            .filter((peer) => peer.email !== email)
             .map((peer) => ({
               email: peer.email,
               videoConsumer: null,
@@ -263,7 +296,7 @@ const RoomPage = () => {
         );
       }
 
-      console.log("F: participants list : ",participants);
+      console.log("F: participants list : ", participants);
 
       try {
         const newDevice = new Device();
@@ -348,10 +381,20 @@ const RoomPage = () => {
 
       setAudioProducer(producer);
       console.log("Producing audio!");
+
+      if (isWorkerReady) {
+        console.log("Whisper model is ready. Whisper is starting to listen...");
+        startListening(stream);
+      } else {
+        console.warn('Whisper model is not ready yet. Transcription paused.');
+      }
+
     } catch (error) {
       console.error("Failed to enable audio:", error);
     }
   };
+
+
 
   const disableVideo = () => {
     if (!videoProducer) return;
@@ -377,106 +420,179 @@ const RoomPage = () => {
     if (!audioProducer) return;
 
     audioProducer.track.stop();
-
     audioProducer.close();
-
     socket.emit("close-producer", {
       roomId: roomId,
       producerId: audioProducer.id,
     });
 
     setAudioProducer(null);
+    stopListening();
     console.log("Audio disabled (Muted).");
   };
 
-  const debugg = ()=>{
-    participants.map(ele=>{
+
+  const debugg = () => {
+    participants.map(ele => {
       console.log(ele);
     })
   };
 
   return (
-    <div>
-      <h1>Room page</h1>
-      <h2>Local Stream</h2>
-      <video
-        ref={localVideoRef}
-        autoPlay
-        playsInline
-        muted
-        style={{
-          width: "300px",
-          backgroundColor: "black",
-          borderRadius: "8px",
-        }}
-      />
+    <div style={{ display: "flex", height: "100vh", width: "100%", overflow: "hidden" }}>
 
-      <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
-        {/* --- VIDEO CONTROLS --- */}
-        {videoProducer ? (
-          <button
-            onClick={disableVideo}
-            style={{
-              backgroundColor: "#ff4d4f",
-              color: "white",
-              border: "none",
-              padding: "8px 16px",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}>
-            Turn Video Off
-          </button>
-        ) : (
-          <button
-            onClick={enableVideo}
-            disabled={!producerTransport}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "4px",
-              cursor: !producerTransport ? "not-allowed" : "pointer",
-            }}>
-            Turn Video On
-          </button>
-        )}
+      {/* LEFT/MAIN COLUMN: Video & Controls */}
+      <div style={{ flex: 1, padding: "20px", overflowY: "auto", display: "flex", flexDirection: "column" }}>
+        <h1>Room page</h1>
+        <h2>Local Stream</h2>
+        <video
+          ref={localVideoRef}
+          autoPlay
+          playsInline
+          muted
+          style={{
+            width: "300px",
+            backgroundColor: "black",
+            borderRadius: "8px",
+          }}
+        />
 
-        {/* --- AUDIO CONTROLS --- */}
-        {audioProducer ? (
-          <button
-            onClick={disableAudio}
-            style={{
-              backgroundColor: "#ff4d4f",
-              color: "white",
-              border: "none",
-              padding: "8px 16px",
-              borderRadius: "4px",
-              cursor: "pointer",
-            }}>
-            Mute Audio
-          </button>
-        ) : (
-          <button
-            onClick={enableAudio}
-            disabled={!producerTransport}
-            style={{
-              padding: "8px 16px",
-              borderRadius: "4px",
-              cursor: !producerTransport ? "not-allowed" : "pointer",
-            }}>
-            Unmute Audio
-          </button>
-        )}
+        <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
+          {/* --- VIDEO CONTROLS --- */}
+          {videoProducer ? (
+            <button
+              onClick={disableVideo}
+              style={{
+                backgroundColor: "#ff4d4f",
+                color: "white",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}>
+              Turn Video Off
+            </button>
+          ) : (
+            <button
+              onClick={enableVideo}
+              disabled={!producerTransport}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "4px",
+                cursor: !producerTransport ? "not-allowed" : "pointer",
+              }}>
+              Turn Video On
+            </button>
+          )}
+
+          {/* --- AUDIO CONTROLS --- */}
+          {audioProducer ? (
+            <button
+              onClick={disableAudio}
+              style={{
+                backgroundColor: "#ff4d4f",
+                color: "white",
+                border: "none",
+                padding: "8px 16px",
+                borderRadius: "4px",
+                cursor: "pointer",
+              }}>
+              Mute Audio
+            </button>
+          ) : (
+            <button
+              onClick={enableAudio}
+              disabled={!producerTransport}
+              style={{
+                padding: "8px 16px",
+                borderRadius: "4px",
+                cursor: !producerTransport ? "not-allowed" : "pointer",
+              }}>
+              Unmute Audio
+            </button>
+          )}
+        </div>
+
+        <h2>Remote Users</h2>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "flex-start", gap: "15px" }}>
+          {participants.map((participant) => (
+            <RemoteMedia
+              key={participant.email}
+              participant={participant}
+            />
+          ))}
+        </div>
+
+        <button
+          onClick={debugg}
+          style={{ marginTop: "20px", alignSelf: "flex-start", padding: "8px 16px" }}>
+          hello
+        </button>
       </div>
 
-      <h2>Remote Users</h2>
-      <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "center" }}>
-        {participants.map((participant) => (
-          <RemoteMedia 
-            key={participant.email} 
-            participant={participant} 
-          />
-        ))}
+      {/* RIGHT COLUMN: AI Summaries & Live Transcript */}
+      <div style={{
+        width: '350px',
+        borderLeft: '1px solid #ccc',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: '#f9f9f9',
+        height: '100%' // Ensure it takes full height of the parent flex container
+      }}>
+
+        {/* TOP HALF: AI Summaries */}
+        <div style={{ flex: 1, overflowY: 'auto', padding: '20px', borderBottom: '2px solid #ddd' }}>
+          <h3>AI Meeting Summaries</h3>
+          {summaries.length === 0 ? (
+            <p style={{ color: '#888', fontStyle: 'italic', fontSize: '0.9em' }}>
+              Waiting for enough conversation to generate a summary... (approx. 10 mins)
+            </p>
+          ) : (
+            summaries.map((summary, index) => (
+              <div key={index} style={{
+                backgroundColor: '#e6f2ff',
+                padding: '12px',
+                borderRadius: '8px',
+                marginBottom: '15px',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.05)'
+              }}>
+                <div style={{ fontSize: '0.8em', color: '#555', marginBottom: '5px' }}>
+                  {new Date(summary.timestamp).toLocaleTimeString()}
+                </div>
+                <div style={{ whiteSpace: 'pre-wrap', fontSize: '0.95em', lineHeight: '1.4' }}>
+                  {summary.text}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+
+        {/* BOTTOM HALF: Live Transcript Sidebar */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '15px 20px', borderBottom: '1px solid #eee', backgroundColor: 'white' }}>
+            <h4 style={{ margin: 0 }}>Live Transcript</h4>
+            <small style={{ color: isWorkerReady ? 'green' : 'orange' }}>
+              {isWorkerReady ? '🟢 Whisper (WebGPU) Ready' : '🟠 Loading Model...'}
+            </small>
+          </div>
+
+          <div style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+            {transcripts.map((text, index) => (
+              <div key={index} style={{
+                backgroundColor: 'white',
+                padding: '10px',
+                borderRadius: '8px',
+                marginBottom: '10px',
+                boxShadow: '0 1px 3px rgba(0,0,0,0.1)'
+              }}>
+                {text}
+              </div>
+            ))}
+            <div ref={transcriptEndRef} />
+          </div>
+        </div>
+
       </div>
-      <button onClick={debugg}>hello</button>
     </div>
   );
 };

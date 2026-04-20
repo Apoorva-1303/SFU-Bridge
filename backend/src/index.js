@@ -1,9 +1,11 @@
-import { httpServer } from './app.js';
-import { createWorker } from "./utils/mediasoup.config.js";
-import dotenv from 'dotenv'
-dotenv.config()
+import "dotenv/config";
 
-const PORT = parseInt(process.env.SERVER_PORT)||3000;
+// console.log(process.env.GEMINI_API_KEY);
+
+import { httpServer } from "./app.js";
+import { createWorker } from "./utils/mediasoup.config.js";
+
+const PORT = parseInt(process.env.SERVER_PORT) || 3000;
 
 createWorker()
   .then(() => {

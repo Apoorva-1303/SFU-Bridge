@@ -2,6 +2,7 @@ import express from "express";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { createWorker } from "./utils/mediasoup.config.js";
+import { generateRoomSummary } from "./utils/generateRoomSum.js";
 
 const app = express();
 const httpServer = createServer(app);
@@ -78,9 +79,15 @@ io.on("connection", (socket) => {
       if (!rooms.has(roomId)) {
         const router = await worker.createRouter({ mediaCodecs });
 
+        const summaryInterval = setInterval(() => {
+          generateRoomSummary(roomId, rooms.get(roomId), io);
+        }, 60 * 1000);
+
         rooms.set(roomId, {
           router: router,
           peers: new Map(), // We'll store connected users here
+          transcripts: [], // Array to hold the user transcripts
+          summaryInterval: summaryInterval
         });
         console.log(`Created new Router for room ${roomId}`);
       }
@@ -90,8 +97,8 @@ io.on("connection", (socket) => {
       if (roomState.peers.has(socket.id)) {
         const existingPeers = Array.from(roomState.peers.values()).map(p => ({ email: p.email }));
         return callback({
-            rtpCapabilities: roomState.router.rtpCapabilities,
-            peers: existingPeers,
+          rtpCapabilities: roomState.router.rtpCapabilities,
+          peers: existingPeers,
         });
       }
 
@@ -100,7 +107,7 @@ io.on("connection", (socket) => {
         existingPeers.push({ email: peer.email });
       });
 
-      console.log("B: existing peers list : ",existingPeers);
+      console.log("B: existing peers list : ", existingPeers);
 
       roomState.peers.set(socket.id, {
         email: email,
@@ -113,11 +120,19 @@ io.on("connection", (socket) => {
 
       callback({
         rtpCapabilities: roomState.router.rtpCapabilities,
-        peers: existingPeers, 
+        peers: existingPeers,
       });
     } catch (error) {
       console.error("Error joining room:", error);
       callback({ error: "Failed to join room" });
+    }
+  });
+
+  socket.on('send-transcript', ({ roomId, text }) => {
+    const roomState = rooms.get(roomId);
+    if (roomState) {
+      const peer = roomState.peers.get(socket.id);
+      roomState.transcripts.push(`${peer.email}: ${text}`);
     }
   });
 
@@ -205,7 +220,7 @@ io.on("connection", (socket) => {
           if (peerSocketId !== socket.id) {
             io.to(peerSocketId).emit("new-producer", {
               producerId: producer.id,
-              email:peer.email
+              email: peer.email
             });
           }
         });
@@ -255,8 +270,8 @@ io.on("connection", (socket) => {
         if (peerSocketId !== socket.id) {
           peer.producers.forEach((producer) => {
             producerList.push({
-              producerId:producer.id,
-              email:peer.email
+              producerId: producer.id,
+              email: peer.email
             });
           });
         }
@@ -315,7 +330,7 @@ io.on("connection", (socket) => {
       }
     },
   );
-  
+
   socket.on("consumer-resume", async ({ roomId, consumerId }) => {
     try {
       const roomState = rooms.get(roomId);
@@ -348,6 +363,7 @@ io.on("connection", (socket) => {
         console.log(`Cleaned up peer ${socket.id} from room ${roomId}`);
 
         if (roomState.peers.size === 0) {
+          clearInterval(roomState.summaryInterval);
           roomState.router.close();
           rooms.delete(roomId);
           console.log(`Room ${roomId} is empty and has been deleted.`);
