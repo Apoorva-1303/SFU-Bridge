@@ -20,13 +20,13 @@ class VADProcessor extends AudioWorkletProcessor {
 			this.port.postMessage({
 				event: 'speech',
 				audio: audioCopy
-			}, [audioCopy.buffer]); // Transfer ownership 
+			}, [audioCopy.buffer]); 
 
 		} else {
 			this.port.postMessage({ event: 'silence' });
 		}
 
-		return true; // Keep the processor alive
+		return true; 
 	}
 }
 

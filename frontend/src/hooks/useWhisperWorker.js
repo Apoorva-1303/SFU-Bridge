@@ -28,16 +28,13 @@ export const useWhisperWorker = (onNewTranscript) => {
       }
     };
 
-    // start downloading/loading the model
     workerRef.current.postMessage({ type: 'load' });
 
-    // cleanup when component unmounts
     return () => {
       workerRef.current?.terminate();
     };
   }, []);
 
-  // to send audio to the worker later
   const sendAudioToWhisper = (float32Array) => {
     if (!isWorkerReady || !workerRef.current) return;
     

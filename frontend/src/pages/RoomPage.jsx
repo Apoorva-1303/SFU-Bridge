@@ -44,7 +44,6 @@ const RoomPage = () => {
   }, [transcripts]);
 
 
-  // const [remoteConsumers, setRemoteConsumers] = useState([]);
   const [participants, setParticipants] = useState([]);
 
   const initiateSendTransport = useCallback(
@@ -136,17 +135,6 @@ const RoomPage = () => {
             kind: params.kind,
             rtpParameters: params.rtpParameters,
           });
-
-          // setRemoteConsumers((prev) => {
-          //   const isDuplicate = prev.some(
-          //     (c) => c.consumer.producerId === params.producerId,
-          //   );
-          //   if (isDuplicate) {
-          //     console.log("Duplicate consumer blocked!");
-          //     return prev;
-          //   }
-          //   return [...prev, {consumer:consumer, email:email}];
-          // });
 
           setParticipants((prev) =>
             prev.map((p) => {

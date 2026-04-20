@@ -1,7 +1,5 @@
 import "dotenv/config";
 
-// console.log(process.env.GEMINI_API_KEY);
-
 import { httpServer } from "./app.js";
 import { createWorker } from "./utils/mediasoup.config.js";
 

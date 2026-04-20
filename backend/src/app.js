@@ -85,8 +85,8 @@ io.on("connection", (socket) => {
 
         rooms.set(roomId, {
           router: router,
-          peers: new Map(), // We'll store connected users here
-          transcripts: [], // Array to hold the user transcripts
+          peers: new Map(), 
+          transcripts: [], 
           summaryInterval: summaryInterval
         });
         console.log(`Created new Router for room ${roomId}`);
@@ -140,12 +140,6 @@ io.on("connection", (socket) => {
     try {
       const roomState = rooms.get(roomId);
       const router = roomState.router;
-
-      // console.log("here begins debugging");
-      // console.log("router :",router);
-      // console.log("roomState: ",roomState);
-      // console.log("roodId :",roomId);
-      // console.log("rooms : ",rooms);
 
       const transport = await createWebRtcTransport(router);
 
