@@ -13,9 +13,16 @@
   "description": "",
   "dependencies": {
     "@google/genai": "^1.50.1",
+    "connect-mongo": "^6.0.0",
     "dotenv": "^17.2.3",
     "express": "^5.2.1",
+    "express-session": "^1.19.0",
     "mediasoup": "^3.19.18",
+    "mongoose": "^9.6.3",
+    "passport": "^0.7.0",
+    "passport-google-oidc": "^0.1.0",
+    "passport-local": "^1.0.0",
+    "passport-local-mongoose": "^9.1.0",
     "socket.io": "^4.8.3"
   }
 }

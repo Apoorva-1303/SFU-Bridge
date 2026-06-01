@@ -3,10 +3,32 @@ import { createServer } from "http";
 import { Server } from "socket.io";
 import { createWorker } from "./utils/mediasoup.config.js";
 import { generateRoomSummary } from "./utils/generateRoomSum.js";
+import passport from "passport";
+import "./config/auth.config.js"
+import cors from "cors";
+import session from 'express-session';
+import sessionConfig from "./config/session.config.js";
+import authRoutes from "./routes/auth.routes.js"
 
 const app = express();
 const httpServer = createServer(app);
 const io = new Server(httpServer);
+
+const corsOrigin = process.env.BASE_CLIENT_URL;
+app.use(cors({
+    origin: corsOrigin,
+    methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
+    credentials: true
+}));
+
+app.use(express.json());
+
+app.use(session(sessionConfig));
+
+app.use(passport.initialize());
+app.use(passport.session());
+
+app.use("/api/auth", authRoutes);
 
 app.get("/", (req, res) => {
   res.send("hello");
