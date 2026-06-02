@@ -1,11 +1,33 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
+import bgImage from "../assets/background.webp";
 
 const LandingPage = () => {
   const [email, setEmail] = useState("");
   const [roomId, setRoomId] = useState("");
   const [showJoinForm, setShowJoinForm] = useState(false);
+  const [user, setUser] = useState(null);
+  const [checkingAuth, setCheckingAuth] = useState(true);
   const navigate = useNavigate();
+
+  // Check auth status on mount to prefill or change button routes
+  useEffect(() => {
+    const checkAuth = async () => {
+      try {
+        const res = await fetch("/api/auth/profile");
+        const data = await res.json();
+        if (res.ok && data.success && data.user) {
+          setUser(data.user);
+          setEmail(data.user.email || "");
+        }
+      } catch (err) {
+        console.log("Not logged in");
+      } finally {
+        setCheckingAuth(false);
+      }
+    };
+    checkAuth();
+  }, []);
 
   const handleJoinSubmit = useCallback((e) => {
     e.preventDefault();
@@ -19,68 +41,75 @@ const LandingPage = () => {
   }, [roomId, navigate, email]);
 
   return (
-    <div style={styles.container}>
-      {/* Background blobs for premium depth */}
-      <div style={styles.blob1}></div>
-      <div style={styles.blob2}></div>
-
-      {/* Main Glassmorphic Wrapper */}
-      <div style={styles.card}>
-        <div style={styles.header}>
+    <div style={styles.pageWrapper}>
+      {/* 100% Width Header Navigation (Floating Tab Across Page) */}
+      <header style={styles.header}>
+        <div style={styles.logoContainer} onClick={() => navigate("/")}>
           <div style={styles.logoBadge}>SFU</div>
-          <h1 style={styles.title}>SFU<span style={styles.gradientText}>Bridge</span></h1>
+          <span style={styles.logoText}>
+            SFU<span style={styles.orangeText}>Bridge</span>
+          </span>
+        </div>
+        <div style={styles.navActions}>
+          {!checkingAuth && (
+            user ? (
+              <button 
+                onClick={() => navigate("/dashboard")} 
+                style={styles.headerBtnPrimary}
+              >
+                Go to Dashboard
+              </button>
+            ) : (
+              <button 
+                onClick={() => navigate("/signup")} 
+                style={styles.headerBtnPrimary}
+              >
+                Sign In / Register
+              </button>
+            )
+          )}
+        </div>
+      </header>
+
+      {/* Main Content Area in the webpage directly (no round floating card) */}
+      <main style={styles.mainContent}>
+        <div style={styles.heroSection}>
+          <h1 style={styles.title}>
+            Simple, Secure Video <span style={styles.orangeGradientText}>Collaboration</span>
+          </h1>
           <p style={styles.subtitle}>
-            A state-of-the-art WebRTC conferencing system powered by Mediasoup SFU, offering real-time collaboration, local AI Whisper transcriptions, and instant meeting summaries.
+            A real-time conferencing system powered by Mediasoup SFU, featuring local Whisper AI transcriptions and Google Gemini summaries.
           </p>
         </div>
 
-        {/* Feature Highlights Grid */}
-        <div style={styles.featuresGrid}>
-          <div style={styles.featureCard}>
-            <div style={styles.featureIcon}>⚡</div>
-            <h3 style={styles.featureTitle}>SFU Multi-party Video</h3>
-            <p style={styles.featureDesc}>Ultra low-latency audio/video routing via Mediasoup SFU, optimizing bandwidth and client performance.</p>
-          </div>
-          <div style={styles.featureCard}>
-            <div style={styles.featureIcon}>🎙️</div>
-            <h3 style={styles.featureTitle}>WebGPU Whisper</h3>
-            <p style={styles.featureDesc}>Private, high-fidelity in-browser speech recognition running locally using Transformers.js and WebGPU.</p>
-          </div>
-          <div style={styles.featureCard}>
-            <div style={styles.featureIcon}>🤖</div>
-            <h3 style={styles.featureTitle}>AI Meeting Summaries</h3>
-            <p style={styles.featureDesc}>Automatic intelligent discussion summaries generated in real-time by Google Gemini model integration.</p>
-          </div>
-        </div>
-
-        {/* Dynamic Interactive Panel */}
-        <div style={styles.actionsContainer}>
+        {/* Action Controls Section */}
+        <div style={styles.interactiveArea}>
           {!showJoinForm ? (
-            <div style={styles.buttonRow}>
+            <div style={styles.buttonGroup}>
               <button 
                 onClick={() => setShowJoinForm(true)} 
-                style={{ ...styles.button, ...styles.buttonSecondary }}
+                style={styles.actionBtnSecondary}
               >
                 Join Existing Room
               </button>
               
               <button 
-                onClick={() => navigate("/signup")} 
-                style={{ ...styles.button, ...styles.buttonPrimary }}
+                onClick={() => navigate(user ? "/dashboard" : "/signup")} 
+                style={styles.actionBtnPrimary}
               >
-                Register to Create Room
+                {user ? "Create a Room" : "Register to Create Room"}
               </button>
             </div>
           ) : (
-            <div style={styles.formContainer}>
-              <h3 style={styles.formTitle}>Join a Conference Room</h3>
+            <div style={styles.joinFormContainer}>
+              <h3 style={styles.formTitle}>Enter a Room</h3>
               <form onSubmit={handleJoinSubmit} style={styles.form}>
                 <div style={styles.inputGroup}>
-                  <label htmlFor="email" style={styles.label}>Your Email</label>
+                  <label htmlFor="email" style={styles.label}>Your Identifier (Email/Name)</label>
                   <input 
-                    type="email" 
+                    type="text" 
                     id="email" 
-                    placeholder="name@example.com"
+                    placeholder="name@example.com or Username"
                     value={email} 
                     onChange={(e) => setEmail(e.target.value)}
                     style={styles.input}
@@ -93,7 +122,7 @@ const LandingPage = () => {
                   <input 
                     type="text" 
                     id="roomId" 
-                    placeholder="Enter unique room code"
+                    placeholder="Enter the room UUID code"
                     value={roomId} 
                     onChange={(e) => setRoomId(e.target.value)}
                     style={styles.input}
@@ -101,17 +130,17 @@ const LandingPage = () => {
                   />
                 </div>
 
-                <div style={styles.formButtons}>
+                <div style={styles.formActions}>
                   <button 
                     type="button" 
                     onClick={() => setShowJoinForm(false)} 
-                    style={{ ...styles.button, ...styles.buttonLink }}
+                    style={styles.cancelBtn}
                   >
-                    ← Back
+                    Cancel
                   </button>
                   <button 
                     type="submit" 
-                    style={{ ...styles.button, ...styles.buttonPrimary }}
+                    style={styles.submitBtn}
                   >
                     Enter Room
                   </button>
@@ -120,214 +149,244 @@ const LandingPage = () => {
             </div>
           )}
         </div>
-      </div>
+      </main>
+
+      {/* Decorative orange glowing orbs in the background */}
+      <div style={styles.glowOrb1}></div>
+      <div style={styles.glowOrb2}></div>
     </div>
   );
 };
 
-// Premium Styling System (Glassmorphic Dark Theme)
 const styles = {
-  container: {
-    minHeight: "92vh",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    fontFamily: "'Outfit', 'Inter', system-ui, sans-serif",
-    position: "relative",
-    overflow: "hidden",
-    color: "#e2e8f0",
-    padding: "2rem",
-  },
-  blob1: {
-    position: "absolute",
-    top: "10%",
-    left: "15%",
-    width: "350px",
-    height: "350px",
-    background: "radial-gradient(circle, rgba(99, 102, 241, 0.3) 0%, rgba(0,0,0,0) 70%)",
-    borderRadius: "50%",
-    filter: "blur(60px)",
-    zIndex: 1,
-  },
-  blob2: {
-    position: "absolute",
-    bottom: "10%",
-    right: "15%",
-    width: "400px",
-    height: "400px",
-    background: "radial-gradient(circle, rgba(168, 85, 247, 0.25) 0%, rgba(0,0,0,0) 70%)",
-    borderRadius: "50%",
-    filter: "blur(60px)",
-    zIndex: 1,
-  },
-  card: {
+  pageWrapper: {
+    minHeight: "100vh",
     width: "100%",
-    maxWidth: "960px",
-    background: "rgba(22, 28, 45, 0.65)",
-    backdropFilter: "blur(20px)",
-    WebkitBackdropFilter: "blur(20px)",
-    border: "1px solid rgba(255, 255, 255, 0.08)",
-    borderRadius: "24px",
-    padding: "3.5rem 3rem",
-    boxShadow: "0 20px 40px rgba(0, 0, 0, 0.4)",
-    zIndex: 2,
+    position: "relative",
     display: "flex",
     flexDirection: "column",
-    gap: "2.5rem",
-    textAlign: "center",
+    /* Dynamic image background with high-quality dark overlay fallback */
+    backgroundImage: `linear-gradient(rgba(8, 11, 17, 0.9), rgba(8, 11, 17, 0.95)), url(${bgImage})`,
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundColor: "#080b11",
+    overflow: "hidden",
+    fontFamily: "'Outfit', 'Inter', sans-serif",
   },
   header: {
+    width: "100%",
     display: "flex",
-    flexDirection: "column",
+    justifyContent: "space-between",
     alignItems: "center",
-    gap: "1rem",
+    padding: "1.25rem 3rem",
+    borderBottom: "1px solid rgba(255, 255, 255, 0.05)",
+    backgroundColor: "rgba(8, 11, 17, 0.6)",
+    backdropFilter: "blur(12px)",
+    zIndex: 10,
+  },
+  logoContainer: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.75rem",
+    cursor: "pointer",
   },
   logoBadge: {
-    background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
+    backgroundColor: "#ff6b00",
     color: "#fff",
-    fontSize: "0.85rem",
+    fontSize: "0.8rem",
     fontWeight: 700,
-    padding: "0.25rem 0.85rem",
-    borderRadius: "20px",
-    letterSpacing: "1px",
-    boxShadow: "0 4px 12px rgba(99, 102, 241, 0.3)",
+    padding: "0.2rem 0.6rem",
+    borderRadius: "6px",
+    boxShadow: "0 0 12px rgba(255, 107, 0, 0.4)",
+  },
+  logoText: {
+    fontSize: "1.35rem",
+    fontWeight: 800,
+    color: "#ffffff",
+    letterSpacing: "-0.5px",
+  },
+  orangeText: {
+    color: "#ff6b00",
+  },
+  navActions: {
+    display: "flex",
+    alignItems: "center",
+  },
+  headerBtnPrimary: {
+    padding: "0.6rem 1.25rem",
+    borderRadius: "8px",
+    fontSize: "0.9rem",
+    fontWeight: 600,
+    border: "1px solid #ff6b00",
+    backgroundColor: "transparent",
+    color: "#ff6b00",
+    transition: "all 0.2s ease",
+  },
+  mainContent: {
+    flex: 1,
+    width: "100%",
+    maxWidth: "800px",
+    margin: "0 auto",
+    padding: "6rem 2rem 4rem 2rem",
+    display: "flex",
+    flexDirection: "column",
+    justifyContent: "center",
+    alignItems: "center",
+    textAlign: "center",
+    zIndex: 5,
+  },
+  heroSection: {
+    marginBottom: "3rem",
   },
   title: {
-    fontSize: "3.5rem",
+    fontSize: "3.25rem",
     fontWeight: 800,
-    margin: 0,
-    letterSpacing: "-1px",
     color: "#ffffff",
-    lineHeight: 1.15,
+    letterSpacing: "-1px",
+    lineHeight: "1.15",
+    marginBottom: "1.25rem",
   },
-  gradientText: {
-    background: "linear-gradient(135deg, #818cf8 0%, #c084fc 100%)",
+  orangeGradientText: {
+    background: "linear-gradient(135deg, #ff9e00 0%, #ff6b00 100%)",
     WebkitBackgroundClip: "text",
     WebkitTextFillColor: "transparent",
   },
   subtitle: {
     fontSize: "1.15rem",
     color: "#94a3b8",
-    maxWidth: "680px",
     lineHeight: "1.6",
-    margin: "0.5rem 0 0 0",
+    maxWidth: "600px",
+    margin: "0 auto",
   },
-  featuresGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
-    gap: "1.5rem",
-    margin: "1rem 0",
+  interactiveArea: {
+    width: "100%",
+    maxWidth: "460px",
+    display: "flex",
+    justifyContent: "center",
   },
-  featureCard: {
-    background: "rgba(30, 41, 59, 0.4)",
-    border: "1px solid rgba(255, 255, 255, 0.05)",
-    borderRadius: "16px",
-    padding: "1.8rem",
-    textAlign: "left",
-    transition: "transform 0.25s ease, border-color 0.25s ease",
+  buttonGroup: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.75rem",
-  },
-  featureIcon: {
-    fontSize: "1.8rem",
-    marginBottom: "0.25rem",
-  },
-  featureTitle: {
-    fontSize: "1.15rem",
-    fontWeight: 600,
-    margin: 0,
-    color: "#f1f5f9",
-  },
-  featureDesc: {
-    fontSize: "0.9rem",
-    color: "#94a3b8",
-    lineHeight: "1.5",
-    margin: 0,
-  },
-  actionsContainer: {
-    marginTop: "1rem",
-    display: "flex",
-    justifyContent: "center",
-  },
-  buttonRow: {
-    display: "flex",
-    flexWrap: "wrap",
-    gap: "1.2rem",
-    justifyContent: "center",
-  },
-  button: {
-    padding: "0.85rem 2rem",
-    borderRadius: "12px",
-    fontSize: "1rem",
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "all 0.25s ease",
-    border: "1px solid transparent",
-  },
-  buttonPrimary: {
-    background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)",
-    color: "#ffffff",
-    boxShadow: "0 4px 15px rgba(99, 102, 241, 0.35)",
-  },
-  buttonSecondary: {
-    background: "rgba(255, 255, 255, 0.06)",
-    color: "#e2e8f0",
-    border: "1px solid rgba(255, 255, 255, 0.12)",
-  },
-  buttonLink: {
-    background: "transparent",
-    color: "#94a3b8",
-    padding: "0.85rem 1.2rem",
-  },
-  formContainer: {
+    gap: "1rem",
     width: "100%",
-    maxWidth: "480px",
-    background: "rgba(15, 23, 42, 0.5)",
-    border: "1px solid rgba(255, 255, 255, 0.06)",
+  },
+  actionBtnPrimary: {
+    width: "100%",
+    padding: "0.9rem",
+    fontSize: "1rem",
+    fontWeight: 700,
+    borderRadius: "10px",
+    border: "none",
+    backgroundColor: "#ff6b00",
+    color: "#ffffff",
+    boxShadow: "0 4px 20px rgba(255, 107, 0, 0.35)",
+    transition: "transform 0.15s ease, background-color 0.15s ease",
+  },
+  actionBtnSecondary: {
+    width: "100%",
+    padding: "0.9rem",
+    fontSize: "1rem",
+    fontWeight: 700,
+    borderRadius: "10px",
+    border: "1px solid rgba(255, 255, 255, 0.15)",
+    backgroundColor: "rgba(255, 255, 255, 0.04)",
+    color: "#f3f4f6",
+    transition: "all 0.2s ease",
+  },
+  joinFormContainer: {
+    width: "100%",
+    backgroundColor: "rgba(21, 28, 44, 0.55)",
+    backdropFilter: "blur(12px)",
+    border: "1px solid rgba(255, 107, 0, 0.2)",
     borderRadius: "16px",
     padding: "2rem",
     textAlign: "left",
-    boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.2)",
+    boxShadow: "0 12px 30px rgba(0, 0, 0, 0.3)",
   },
   formTitle: {
     fontSize: "1.25rem",
     fontWeight: 700,
-    margin: "0 0 1.5rem 0",
     color: "#ffffff",
+    marginBottom: "1.25rem",
     textAlign: "center",
+    letterSpacing: "-0.3px",
   },
   form: {
     display: "flex",
     flexDirection: "column",
-    gap: "1.2rem",
+    gap: "1.1rem",
   },
   inputGroup: {
     display: "flex",
     flexDirection: "column",
-    gap: "0.5rem",
+    gap: "0.4rem",
   },
   label: {
     fontSize: "0.85rem",
     fontWeight: 600,
-    color: "#94a3b8",
-    letterSpacing: "0.5px",
+    color: "#ff9e00",
   },
   input: {
-    padding: "0.8rem 1rem",
-    borderRadius: "10px",
-    background: "rgba(15, 23, 42, 0.8)",
+    padding: "0.75rem 1rem",
+    borderRadius: "8px",
+    backgroundColor: "rgba(8, 11, 17, 0.8)",
     border: "1px solid rgba(255, 255, 255, 0.15)",
     color: "#ffffff",
     fontSize: "0.95rem",
     outline: "none",
     transition: "border-color 0.2s ease",
   },
-  formButtons: {
+  formActions: {
     display: "flex",
     justifyContent: "space-between",
-    alignItems: "center",
+    gap: "1rem",
     marginTop: "0.5rem",
+  },
+  cancelBtn: {
+    flex: 1,
+    padding: "0.75rem",
+    fontSize: "0.95rem",
+    fontWeight: 600,
+    borderRadius: "8px",
+    border: "1px solid rgba(255, 255, 255, 0.1)",
+    backgroundColor: "transparent",
+    color: "#94a3b8",
+  },
+  submitBtn: {
+    flex: 2,
+    padding: "0.75rem",
+    fontSize: "0.95rem",
+    fontWeight: 700,
+    borderRadius: "8px",
+    border: "none",
+    backgroundColor: "#ff6b00",
+    color: "#ffffff",
+    boxShadow: "0 4px 12px rgba(255, 107, 0, 0.3)",
+  },
+  glowOrb1: {
+    position: "absolute",
+    top: "20%",
+    left: "-10%",
+    width: "400px",
+    height: "400px",
+    background: "radial-gradient(circle, rgba(255, 107, 0, 0.08) 0%, rgba(0,0,0,0) 70%)",
+    borderRadius: "50%",
+    filter: "blur(60px)",
+    pointerEvents: "none",
+    zIndex: 1,
+  },
+  glowOrb2: {
+    position: "absolute",
+    bottom: "10%",
+    right: "-10%",
+    width: "500px",
+    height: "500px",
+    background: "radial-gradient(circle, rgba(255, 107, 0, 0.05) 0%, rgba(0,0,0,0) 70%)",
+    borderRadius: "50%",
+    filter: "blur(70px)",
+    pointerEvents: "none",
+    zIndex: 1,
   },
 };
 

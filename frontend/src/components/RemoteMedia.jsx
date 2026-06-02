@@ -26,16 +26,18 @@ export const RemoteMedia = ({ participant }) => {
     <div
       style={{
         position: "relative",
-        width: "320px",
-        height: "240px",
-        backgroundColor: "#202124", 
+        width: "100%",
+        height: "100%",
+        minHeight: "180px",
+        backgroundColor: "#111827", 
         borderRadius: "12px",
-        margin: "10px",
         overflow: "hidden",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        boxShadow: "0 4px 6px rgba(0,0,0,0.3)",
+        boxShadow: "0 8px 24px rgba(0,0,0,0.35)",
+        border: "1px solid rgba(255, 107, 0, 0.15)",
+        transition: "transform 0.2s ease",
       }}
     >
       {audioConsumer && (
@@ -58,39 +60,43 @@ export const RemoteMedia = ({ participant }) => {
       ) : (
         <div
           style={{
-            width: "80px",
-            height: "80px",
+            width: "70px",
+            height: "70px",
             borderRadius: "50%",
-            backgroundColor: "#8ab4f8", 
-            color: "#202124",
+            backgroundColor: "#ff6b00", 
+            color: "#ffffff",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            fontSize: "36px",
+            fontSize: "30px",
             fontWeight: "bold",
+            boxShadow: "0 0 16px rgba(255, 107, 0, 0.4)",
           }}
         >
           {avatarLetter}
         </div>
       )}
 
+      {/* Label Overlay */}
       <div
         style={{
           position: "absolute",
-          bottom: "10px",
-          left: "10px",
-          backgroundColor: "rgba(0, 0, 0, 0.6)",
+          bottom: "12px",
+          left: "12px",
+          backgroundColor: "rgba(11, 15, 23, 0.8)",
+          backdropFilter: "blur(6px)",
           color: "white",
           padding: "4px 10px",
           borderRadius: "6px",
-          fontSize: "13px",
+          fontSize: "12px",
           display: "flex",
           alignItems: "center",
           gap: "6px",
+          border: "1px solid rgba(255, 107, 0, 0.25)",
         }}
       >
         {!audioConsumer && (
-          <span style={{ color: "#ea4335", fontSize: "16px" }}>
+          <span style={{ color: "#ef4444", fontSize: "14px" }}>
             🔇
           </span>
         )}
