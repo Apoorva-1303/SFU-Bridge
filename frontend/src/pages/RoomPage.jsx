@@ -40,7 +40,6 @@ const RoomPage = () => {
     transcriptEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [transcripts]);
 
-  // Bind local stream when local video element becomes available in DOM
   useEffect(() => {
     if (localVideoRef.current && localStream) {
       localVideoRef.current.srcObject = localStream;
@@ -434,10 +433,8 @@ const RoomPage = () => {
     })
   };
 
-  // Local user details for placeholder
   const localAvatarLetter = email ? email.charAt(0).toUpperCase() : "U";
 
-  // Calculate dynamic grid column layout to maximize video block sizes (opentok layout style)
   const totalVideoBlocks = 1 + participants.length;
   let gridCols = "repeat(auto-fit, minmax(320px, 1fr))";
   if (totalVideoBlocks === 1) {
@@ -449,17 +446,14 @@ const RoomPage = () => {
   return (
     <div style={styles.roomContainer}>
       
-      {/* LEFT/MAIN SECTION: Video Layout & Controls */}
       <div style={styles.mainVideoArea}>
         
-        {/* Top Header Row within Main Area */}
         <div style={styles.topHeader}>
           <div style={styles.liveBadge}>
             <span style={styles.liveDot}></span>
             <span>LIVE CONFERENCE</span>
           </div>
 
-          {/* Copyable Room ID Widget */}
           <div style={styles.roomIdWidget}>
             <span style={styles.roomIdLabel}>Room ID:</span>
             <span style={styles.roomIdValue} title={roomId}>{roomId}</span>
@@ -560,7 +554,6 @@ const RoomPage = () => {
         </div>
       </div>
 
-      {/* RIGHT SECTION: AI Summaries & Live Transcript Sidebar (CORNER MOUNTED) */}
       <div style={styles.sidebar}>
         
         {/* UPPER PANEL: AI Summaries */}
@@ -618,7 +611,6 @@ const RoomPage = () => {
   );
 };
 
-// Premium Styles for Room Page
 const styles = {
   roomContainer: {
     display: "flex",
@@ -714,7 +706,7 @@ const styles = {
     alignItems: "center",
     justifyContent: "center",
     overflow: "hidden",
-    marginBottom: "80px", // space for controls bar
+    marginBottom: "80px", 
   },
   videoGrid: {
     display: "grid",
@@ -747,7 +739,7 @@ const styles = {
     width: "100%",
     height: "100%",
     objectFit: "cover",
-    transform: "scaleX(-1)", // Mirror local video
+    transform: "scaleX(-1)", 
   },
   avatarPlaceholder: {
     width: "100%",
@@ -831,7 +823,6 @@ const styles = {
     border: "1px solid #ef4444",
   },
   
-  /* Sidebar styles (Corner-mounted, Dark theme, White text) */
   sidebar: {
     width: "360px",
     height: "100%",

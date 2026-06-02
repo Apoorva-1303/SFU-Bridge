@@ -10,7 +10,6 @@ const LandingPage = () => {
   const [checkingAuth, setCheckingAuth] = useState(true);
   const navigate = useNavigate();
 
-  // Check auth status on mount to prefill or change button routes
   useEffect(() => {
     const checkAuth = async () => {
       try {
@@ -42,7 +41,6 @@ const LandingPage = () => {
 
   return (
     <div style={styles.pageWrapper}>
-      {/* 100% Width Header Navigation (Floating Tab Across Page) */}
       <header style={styles.header}>
         <div style={styles.logoContainer} onClick={() => navigate("/")}>
           <div style={styles.logoBadge}>SFU</div>
@@ -71,7 +69,6 @@ const LandingPage = () => {
         </div>
       </header>
 
-      {/* Main Content Area in the webpage directly (no round floating card) */}
       <main style={styles.mainContent}>
         <div style={styles.heroSection}>
           <h1 style={styles.title}>
@@ -82,7 +79,6 @@ const LandingPage = () => {
           </p>
         </div>
 
-        {/* Action Controls Section */}
         <div style={styles.interactiveArea}>
           {!showJoinForm ? (
             <div style={styles.buttonGroup}>
@@ -151,7 +147,6 @@ const LandingPage = () => {
         </div>
       </main>
 
-      {/* Decorative orange glowing orbs in the background */}
       <div style={styles.glowOrb1}></div>
       <div style={styles.glowOrb2}></div>
     </div>
@@ -165,7 +160,6 @@ const styles = {
     position: "relative",
     display: "flex",
     flexDirection: "column",
-    /* Dynamic image background with high-quality dark overlay fallback */
     backgroundImage: `linear-gradient(rgba(8, 11, 17, 0.9), rgba(8, 11, 17, 0.95)), url(${bgImage})`,
     backgroundSize: "cover",
     backgroundPosition: "center",

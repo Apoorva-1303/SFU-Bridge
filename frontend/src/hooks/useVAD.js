@@ -40,16 +40,12 @@ export const useVAD = (sendAudioToWhisper) => {
     const AudioContext = window.AudioContext || window.webkitAudioContext;
     audioContextRef.current = new AudioContext({ sampleRate: 16000 });
 
-    // 1. Load the Worklet module using the Vite URL
     await audioContextRef.current.audioWorklet.addModule(vadWorkletUrl);
 
-    // 2. Connect the mic to the AudioContext
     audioSourceRef.current = audioContextRef.current.createMediaStreamSource(mediaStream);
 
-    // 3. Create the Worklet Node
     workletNodeRef.current = new AudioWorkletNode(audioContextRef.current, 'vad-processor');
 
-    // 4. Listen for messages coming from the Audio Thread
     workletNodeRef.current.port.onmessage = (event) => {
       const { event: type, audio } = event.data;
 

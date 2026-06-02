@@ -11,7 +11,6 @@ const DashboardPage = () => {
   const [showSuccessBanner, setShowSuccessBanner] = useState(true);
   const navigate = useNavigate();
 
-  // Fetch active session profile on mount
   useEffect(() => {
     const fetchProfile = async () => {
       try {
@@ -23,7 +22,6 @@ const DashboardPage = () => {
           setDisplayName(data.user.username || data.user.email.split("@")[0]);
           setEmailToUse(data.user.email);
         } else {
-          // If not authenticated, redirect to signup/login
           navigate("/signup");
         }
       } catch (err) {
@@ -60,16 +58,13 @@ const DashboardPage = () => {
       return;
     }
 
-    // Generate a secure, unique UUID for the room
     let uuid = "";
     if (typeof self.crypto !== "undefined" && typeof self.crypto.randomUUID === "function") {
       uuid = self.crypto.randomUUID();
     } else {
-      // Robust fallback generator
       uuid = "room-" + Math.random().toString(36).substr(2, 9) + "-" + Date.now().toString(36);
     }
 
-    // Navigate to the room page using standard flow and passing state
     navigate(`/room/${uuid}`, {
       state: { email: emailToUse }
     });
@@ -126,7 +121,6 @@ const DashboardPage = () => {
 
       {/* Main Container */}
       <main style={styles.mainContent}>
-        {/* Spacious, Friendly Dashboard Box (floating card but less intimidating) */}
         <div style={styles.dashboardCard}>
           <div style={styles.cardHeader}>
             <span style={styles.orangeTag}>QUICK ACTIONS</span>

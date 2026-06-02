@@ -13,7 +13,6 @@ const SignupPage = () => {
   const [successMsg, setSuccessMsg] = useState("");
   const navigate = useNavigate();
 
-  // Check if user is already authenticated on mount
   useEffect(() => {
     const checkAuthStatus = async () => {
       try {
